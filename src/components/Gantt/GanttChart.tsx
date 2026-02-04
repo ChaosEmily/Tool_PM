@@ -84,8 +84,16 @@ export function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
         const offsetDays = differenceInDays(start, startDate);
         const durationDays = Math.max(1, differenceInDays(actualEnd, start) + 1);
 
+        // 确保横条不会延伸到负位置，防止遮挡左侧任务名称栏位
+        // 如果任务的开始日期早于视图开始日期，从第1列开始显示
+        const startColumn = Math.max(1, offsetDays + 1);
+        // 如果任务开始位置被截断，需要调整持续时间
+        const adjustedDuration = offsetDays < 0
+            ? Math.max(1, durationDays + offsetDays)
+            : durationDays;
+
         return {
-            gridColumn: `${offsetDays + 1} / span ${durationDays}`,
+            gridColumn: `${startColumn} / span ${adjustedDuration}`,
             gridRow: 1
         };
     };
@@ -121,28 +129,45 @@ export function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
             <div className="overflow-x-auto overflow-y-auto flex-1">
                 {/* Header Row */}
                 <div
-                    className="grid sticky top-0 z-20 border-b border-gray-200 bg-gray-50"
-                    style={{ gridTemplateColumns: `200px repeat(${totalDays}, ${colWidth}px)` }}
+                    className="grid sticky top-0 z-20 border-b border-gray-200 bg-gray-50 min-w-max"
+                    style={{
+                        gridTemplateColumns: `200px repeat(${totalDays}, ${colWidth}px)`,
+                        minHeight: timeSpan === '1year' ? '32px' : '56px'
+                    }}
                 >
-                    <div className="sticky left-0 bg-gray-50 z-30 border-r border-gray-200 p-2 font-semibold text-gray-700 min-w-[200px]">
+                    <div className="sticky left-0 bg-gray-50 z-30 border-r border-gray-200 p-2 font-semibold text-gray-700 w-[200px] max-w-[200px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
                         Task Name / Assignee
                     </div>
                     {days.map(day => (
                         <div
                             key={day.fullDate}
-                            className={`flex flex-col items-center justify-center border-r border-gray-100 relative ${day.isWeekend ? 'bg-gray-100/50' : ''} ${day.monthName ? 'border-l-2 border-l-blue-200' : ''}`}
-                            style={{ minWidth: `${colWidth}px` }}
+                            className={`flex flex-col items-center justify-end border-r border-gray-100 relative ${day.isWeekend ? 'bg-gray-100/50' : ''} ${day.monthName ? 'border-l-2 border-l-blue-200' : ''}`}
+                            style={{
+                                minWidth: `${colWidth}px`,
+                                maxWidth: `${colWidth}px`,
+                                width: `${colWidth}px`,
+                                paddingBottom: '4px'
+                            }}
                         >
+                            {/* 月份标签：確保在所有時間跨度下都可見，且不被遮擋 */}
+                            {day.monthName && (
+                                <div className={`absolute flex justify-center z-10 pointer-events-none top-1 left-0 right-0`}>
+                                    <span className={`bg-blue-600 text-white px-1.5 rounded-sm shadow-sm whitespace-nowrap ${timeSpan === '1year' ? 'text-[8px] py-0' : 'text-[10px] py-0.5'}`}>
+                                        {day.monthName}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* 日期顯示：一年視圖下隱藏具體日期以防重疊 */}
                             {timeSpan !== '1year' && (
                                 <>
-                                    <span className="text-[9px] text-gray-500 leading-none">{day.dayName}</span>
+                                    <span className="text-[9px] text-gray-400 leading-none">{day.dayName}</span>
                                     <span className="text-[11px] font-medium text-gray-700">{day.label}</span>
                                 </>
                             )}
-                            {day.monthName && (
-                                <span className={`absolute bg-blue-500 text-white text-[9px] px-1 rounded-sm shadow-sm z-40 whitespace-nowrap ${timeSpan === '1year' ? 'top-1/2 -translate-y-1/2 text-[10px]' : '-top-1 -translate-y-full'}`}>
-                                    {day.monthName}
-                                </span>
+                            {/* 一年視圖僅在月初顯示標記，或者完全隱藏日期數字 */}
+                            {timeSpan === '1year' && isFirstDayOfMonth(day.date) && (
+                                <div className="w-[1px] h-2 bg-gray-300 mb-1" />
                             )}
                         </div>
                     ))}
@@ -157,9 +182,12 @@ export function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
                             style={{ gridTemplateColumns: `200px repeat(${totalDays}, ${colWidth}px)` }}
                         >
                             {/* Fixed Left Column */}
-                            <div className="sticky left-0 bg-white group-hover:bg-gray-50 z-10 border-r border-gray-200 p-2 text-sm font-medium text-gray-900 flex flex-col justify-center min-w-[200px]">
+                            <div className="sticky left-0 bg-white group-hover:bg-gray-50 z-20 border-r border-gray-200 p-2 text-sm font-medium text-gray-900 flex flex-col justify-center w-[200px] max-w-[200px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
                                 <span className="truncate w-full block" title={task.title}>{task.title}</span>
-                                <span className="text-[10px] text-gray-500 font-normal truncate w-full flex items-center gap-1 mt-0.5">
+                                <span
+                                    className="text-[10px] text-gray-500 font-normal truncate w-full flex items-center gap-1 mt-0.5"
+                                    title={task.assignee}
+                                >
                                     👤 {task.assignee}
                                 </span>
                             </div>
@@ -186,11 +214,11 @@ export function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
                                 {/* Layer 2: The Task Bar */}
                                 <div
                                     onClick={() => onTaskClick(task)}
-                                    className={`z-10 self-center h-6 rounded shadow-sm cursor-pointer hover:shadow-md hover:brightness-110 transition-all px-2 flex items-center text-[10px] text-white overflow-hidden whitespace-nowrap border ${getStatusColor(task.status)}`}
+                                    className={`z-0 self-center h-6 rounded shadow-sm cursor-pointer hover:shadow-md hover:brightness-110 transition-all px-2 flex items-center text-[10px] text-white overflow-hidden whitespace-nowrap border ${getStatusColor(task.status)}`}
                                     style={getTaskStyle(task)}
-                                    title={`${task.title} (${task.start_date} ~ ${task.end_date})`}
+                                    title={`${task.title} (${task.start_date} ~ ${task.end_date}) - 負責人: ${task.assignee}`}
                                 >
-                                    {timeSpan !== '1year' && <span className="truncate">{task.title}</span>}
+                                    {colWidth > 30 && <span className="truncate">{task.title}</span>}
                                 </div>
                             </div>
                         </div>
