@@ -7,7 +7,7 @@ import { TaskProvider } from './context/TaskContext';
 export default function App() {
   return (
     <TaskProvider>
-      <BrowserRouter basename="/tool-pm/">
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<TaskBoard />} />
